@@ -6,10 +6,10 @@ Built with [Nuxt](https://nuxt.com/) and the Web Audio API. No install required 
 
 ## Features
 
-- **Real-time pitch detection** via microphone (autocorrelation algorithm)
+- **Real-time pitch detection** via microphone (YIN algorithm)
 - **Visual feedback** — semicircle gauge, cents readout, and frequency display
 - **11 tunings** grouped by category, from standard E A D G to drop tunings, piccolo, and fifths
-- **Per-string selection** — tune one string at a time against a fixed target frequency
+- **Manual string selection** — pick which string you are tuning
 - **In-tune indicator** — within ±5 cents of the target
 - **Responsive layout** — sidebar tuning picker on desktop, stacked on mobile
 
@@ -52,10 +52,10 @@ Output is written to `.output/public`.
 ## How to use
 
 1. Pick a **tuning** from the sidebar (e.g. Standard, Drop D).
-2. Select the **string** you want to tune (E, A, D, or G).
+2. Select the **string** you want to tune.
 3. Click **Start tuning** and allow microphone access.
-4. Play the selected string on your bass.
-5. Adjust until the needle is centered and the status shows **In tune**.
+4. Play that string and adjust until the needle is centered and the status shows **In tune**.
+5. Select the next string and repeat.
 
 **Flat** means the pitch is too low — tighten the string. **Sharp** means it is too high — loosen the string.
 
@@ -93,7 +93,7 @@ Reference pitch: **A4 = 440 Hz**.
 
 - [Nuxt 4](https://nuxt.com/) / [Vue 3](https://vuejs.org/)
 - Web Audio API — `AudioContext`, `AnalyserNode`, microphone input
-- Pitch detection — autocorrelation on the time-domain signal
+- Pitch detection — YIN on the time-domain signal
 - Typography — Playfair Display, Inter, JetBrains Mono
 
 ## Project structure

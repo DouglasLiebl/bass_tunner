@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { BASS_TUNING_CATEGORIES, centsToLabel, tuningLabel } from '~/utils/tuning'
+import {
+  BASS_TUNING_CATEGORIES,
+  centsToLabel,
+  tuningLabel,
+} from '~/utils/tuning'
 
 const categories = BASS_TUNING_CATEGORIES
 const selectedTuningId = ref('standard')
@@ -34,8 +38,8 @@ const tuningStatus = computed(() => {
 
 const needleRotation = computed(() => {
   if (cents.value === null) return 0
-  const clamped = Math.max(-50, Math.min(50, cents.value))
-  return (clamped / 50) * 52
+  const clamped = Math.max(-60, Math.min(60, cents.value))
+  return (clamped / 60) * 48
 })
 
 const gaugeTicks = [-40, -20, 0, 20, 40].map((tick) => {
@@ -49,9 +53,11 @@ const gaugeTicks = [-40, -20, 0, 20, 40].map((tick) => {
   }
 })
 
-const statusLabel = computed(() => {
-  if (!isListening.value) return 'Ready'
-  if (cents.value === null) return 'Listening'
+const listenLabel = computed(() => (isListening.value ? 'Listening' : 'Ready'))
+
+const tuningHint = computed(() => {
+  if (!isListening.value) return null
+  if (cents.value === null) return 'Play the string'
   if (tuningStatus.value === 'in-tune') return 'In tune'
   if (tuningStatus.value === 'flat') return 'Tune up'
   return 'Tune down'
@@ -105,11 +111,8 @@ async function toggleListening() {
             <h2 class="page-title">{{ currentTuning.name }}</h2>
             <p class="page-meta">{{ tuningLabel(currentTuning) }}</p>
           </div>
-          <span
-            class="status"
-            :class="{ active: tuningStatus === 'in-tune', live: isListening }"
-          >
-            {{ statusLabel }}
+          <span class="status" :class="{ live: isListening }">
+            {{ listenLabel }}
           </span>
         </header>
 
@@ -150,6 +153,14 @@ async function toggleListening() {
             </div>
           </div>
 
+          <p
+            v-if="tuningHint"
+            class="tuning-hint label-caps"
+            :class="tuningStatus"
+          >
+            {{ tuningHint }}
+          </p>
+
           <p class="note">{{ selectedString.note }}</p>
 
           <div class="readouts">
@@ -170,7 +181,8 @@ async function toggleListening() {
           <button
             v-for="(str, i) in strings"
             :key="`${str.note}-${i}`"
-            class="btn-secondary string-btn"
+            type="button"
+            class="string-btn"
             :class="{ active: selectedIndex === i, tuned: selectedIndex === i && tuningStatus === 'in-tune' }"
             @click="selectedIndex = i"
           >
@@ -239,7 +251,6 @@ async function toggleListening() {
   width: 100%;
 }
 
-/* Sidebar */
 .sidebar {
   width: min(360px, 32vw);
   flex-shrink: 0;
@@ -346,7 +357,6 @@ async function toggleListening() {
   letter-spacing: 0.02em;
 }
 
-/* Main */
 .main {
   flex: 1;
   min-width: 0;
@@ -401,16 +411,25 @@ async function toggleListening() {
   transition: border-color var(--transition), color var(--transition);
 }
 
-.status.active {
+.status.live {
   border-color: var(--accent);
   color: var(--text-primary);
 }
 
-.status.live {
+.tuning-hint {
+  margin-top: var(--space-sm);
+  color: var(--text-secondary);
+}
+
+.tuning-hint.in-tune {
   color: var(--text-primary);
 }
 
-/* Card */
+.tuning-hint.flat,
+.tuning-hint.sharp {
+  color: var(--accent);
+}
+
 .card {
   background: var(--bg-primary);
   border: 1px solid var(--line);
@@ -435,7 +454,7 @@ async function toggleListening() {
 }
 
 .needle {
-  transition: transform 0.1s ease-out;
+  transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .tuner-card.in-tune .gauge-svg {
@@ -503,14 +522,16 @@ async function toggleListening() {
   transition: width 0.06s linear;
 }
 
-/* String buttons */
 .strings {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-sm);
 }
 
-.btn-secondary {
+.string-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 0.75rem;
   border: 1.5px solid var(--line);
@@ -519,28 +540,29 @@ async function toggleListening() {
   font-family: var(--font-body);
   font-size: 1rem;
   font-weight: 400;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition), opacity var(--transition);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
 }
 
-.btn-secondary:hover {
+.string-btn:hover {
   background: var(--bg-secondary);
-  opacity: 0.9;
+  color: var(--text-primary);
 }
 
 .string-btn.active {
   border-color: var(--accent);
   background: var(--bg-secondary);
   font-weight: 500;
+  color: var(--text-primary);
 }
 
 .string-btn.tuned {
   border-color: var(--text-primary);
   font-weight: 600;
+  color: var(--text-primary);
 }
 
-/* Primary button */
 .btn-primary {
   width: 100%;
   min-height: 48px;

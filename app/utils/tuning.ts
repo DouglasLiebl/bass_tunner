@@ -159,6 +159,16 @@ export function frequencyToCents(frequency: number, target: number): number {
   return 1200 * Math.log2(frequency / target)
 }
 
+export function normalizeToTargetOctave(frequency: number, target: number): number {
+  if (frequency <= 0 || target <= 0) return frequency
+  const octaves = Math.round(Math.log2(frequency / target))
+  return frequency / 2 ** octaves
+}
+
+export function centsFromDetected(frequency: number, target: number): number {
+  return frequencyToCents(normalizeToTargetOctave(frequency, target), target)
+}
+
 export function centsToLabel(cents: number): 'flat' | 'sharp' | 'in-tune' {
   if (Math.abs(cents) < 5) return 'in-tune'
   return cents < 0 ? 'flat' : 'sharp'
