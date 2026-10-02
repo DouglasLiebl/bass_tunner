@@ -1,35 +1,130 @@
 <script setup lang="ts">
 import {
   BASS_TUNING_CATEGORIES,
+  CUSTOM_TUNING_ID,
   centsToLabel,
+  createEmptyCustomStrings,
+  customTuningLabel,
+  frequencyToNote,
   tuningLabel,
+  type BassString,
+  type DetectedNote,
 } from '~/utils/tuning'
 
 const categories = BASS_TUNING_CATEGORIES
 const selectedTuningId = ref('standard')
 const selectedIndex = ref(0)
+const customStrings = ref<BassString[]>(createEmptyCustomStrings())
+const liveNote = ref<DetectedNote | null>(null)
 
-const currentTuning = computed(
-  () =>
+const NOTE_STABLE_FRAMES = 4
+let pendingMidi: number | null = null
+let noteStableFrames = 0
+
+const isCustom = computed(() => selectedTuningId.value === CUSTOM_TUNING_ID)
+
+const currentTuning = computed(() => {
+  if (isCustom.value) {
+    return {
+      id: CUSTOM_TUNING_ID,
+      name: 'Custom tuning',
+      strings: customStrings.value,
+    }
+  }
+
+  return (
     categories
       .flatMap((c) => c.tunings)
-      .find((t) => t.id === selectedTuningId.value) ?? categories[0].tunings[0],
-)
+      .find((t) => t.id === selectedTuningId.value) ?? categories[0].tunings[0]
+  )
+})
+
 const strings = computed(() => currentTuning.value.strings)
 const selectedString = computed(() => strings.value[selectedIndex.value])
 
-watch(selectedTuningId, () => {
-  selectedIndex.value = 0
+const pageMeta = computed(() =>
+  isCustom.value
+    ? customTuningLabel(customStrings.value)
+    : tuningLabel(currentTuning.value),
+)
+
+const displayNote = computed(() => {
+  if (isCustom.value) {
+    return liveNote.value?.note ?? selectedString.value.note
+  }
+  return selectedString.value.note
+})
+
+const displayTargetHz = computed(() => {
+  if (isCustom.value) {
+    return liveNote.value?.frequency ?? null
+  }
+  return selectedString.value.frequency
 })
 
 const { isListening, frequency, cents, volume, error, setTarget, start, stop } =
   usePitchDetector()
 
+watch(selectedTuningId, (id) => {
+  selectedIndex.value = 0
+  liveNote.value = null
+  pendingMidi = null
+  noteStableFrames = 0
+  if (id === CUSTOM_TUNING_ID) setTarget(null)
+})
+
+watch(selectedIndex, () => {
+  if (!isCustom.value) return
+  liveNote.value = null
+  pendingMidi = null
+  noteStableFrames = 0
+  setTarget(null)
+})
+
 watch(
-  selectedString,
-  (s) => setTarget(s.frequency),
+  [selectedString, isCustom],
+  ([s, custom]) => {
+    if (custom) {
+      setTarget(null)
+      return
+    }
+    if (s.frequency > 0) setTarget(s.frequency)
+  },
   { immediate: true },
 )
+
+watch(frequency, (freq) => {
+  if (!isCustom.value || !isListening.value || freq === null) {
+    if (!isCustom.value) return
+    liveNote.value = null
+    pendingMidi = null
+    noteStableFrames = 0
+    return
+  }
+
+  const detected = frequencyToNote(freq)
+  if (!detected) return
+
+  setTarget(detected.frequency)
+
+  if (detected.midi === pendingMidi) {
+    noteStableFrames++
+  } else {
+    pendingMidi = detected.midi
+    noteStableFrames = 1
+  }
+
+  if (noteStableFrames >= NOTE_STABLE_FRAMES) {
+    liveNote.value = detected
+    const next = [...customStrings.value]
+    next[selectedIndex.value] = {
+      name: detected.name,
+      note: detected.note,
+      frequency: detected.frequency,
+    }
+    customStrings.value = next
+  }
+})
 
 const tuningStatus = computed(() => {
   if (cents.value === null) return null
@@ -57,7 +152,9 @@ const listenLabel = computed(() => (isListening.value ? 'Listening' : 'Ready'))
 
 const tuningHint = computed(() => {
   if (!isListening.value) return null
-  if (cents.value === null) return 'Play the string'
+  if (cents.value === null) {
+    return isCustom.value ? 'Play the selected string' : 'Play the string'
+  }
   if (tuningStatus.value === 'in-tune') return 'In tune'
   if (tuningStatus.value === 'flat') return 'Tune up'
   return 'Tune down'
@@ -69,6 +166,14 @@ const displayCents = computed(() => {
   if (rounded === 0) return '0'
   return rounded > 0 ? `+${rounded}` : `${rounded}`
 })
+
+function selectTuning(id: string) {
+  selectedTuningId.value = id
+}
+
+function selectString(index: number) {
+  selectedIndex.value = index
+}
 
 async function toggleListening() {
   if (isListening.value) stop()
@@ -93,10 +198,26 @@ async function toggleListening() {
               <button
                 class="nav-item"
                 :class="{ active: selectedTuningId === tuning.id }"
-                @click="selectedTuningId = tuning.id"
+                @click="selectTuning(tuning.id)"
               >
                 <span class="nav-item-name">{{ tuning.name }}</span>
                 <span class="nav-item-notes">{{ tuningLabel(tuning) }}</span>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <section class="nav-section">
+          <h2 class="label-caps nav-section-label">Custom</h2>
+          <ul class="nav-list">
+            <li>
+              <button
+                class="nav-item"
+                :class="{ active: isCustom }"
+                @click="selectTuning(CUSTOM_TUNING_ID)"
+              >
+                <span class="nav-item-name">Custom tuning</span>
+                <span class="nav-item-notes">{{ customTuningLabel(customStrings) }}</span>
               </button>
             </li>
           </ul>
@@ -109,7 +230,7 @@ async function toggleListening() {
         <header class="page-header">
           <div>
             <h2 class="page-title">{{ currentTuning.name }}</h2>
-            <p class="page-meta">{{ tuningLabel(currentTuning) }}</p>
+            <p class="page-meta">{{ pageMeta }}</p>
           </div>
           <span class="status" :class="{ live: isListening }">
             {{ listenLabel }}
@@ -161,14 +282,17 @@ async function toggleListening() {
             {{ tuningHint }}
           </p>
 
-          <p class="note">{{ selectedString.note }}</p>
+          <p class="note">{{ displayNote }}</p>
 
           <div class="readouts">
             <p v-if="displayCents !== null" class="readout-primary">{{ displayCents }} cents</p>
             <p v-else class="readout-primary muted">—</p>
             <p class="readout-meta">
               <span>{{ frequency ? frequency.toFixed(1) : '—' }}</span>
-              <span class="readout-target">/ {{ selectedString.frequency }} Hz</span>
+              <span class="readout-target">
+                /
+                {{ displayTargetHz !== null ? `${displayTargetHz.toFixed(1)} Hz` : '— Hz' }}
+              </span>
             </p>
           </div>
 
@@ -184,7 +308,7 @@ async function toggleListening() {
             type="button"
             class="string-btn"
             :class="{ active: selectedIndex === i, tuned: selectedIndex === i && tuningStatus === 'in-tune' }"
-            @click="selectedIndex = i"
+            @click="selectString(i)"
           >
             {{ str.name }}
           </button>
@@ -220,7 +344,7 @@ async function toggleListening() {
       <div class="footbar-block">
         <span class="label-caps footbar-label">How to use</span>
         <p class="footbar-text">
-          Choose a tuning from the sidebar, select a string, start listening, and play that string.
+          Pick a preset or Custom tuning, select a string, start listening, and play that string.
         </p>
       </div>
     </div>
@@ -249,6 +373,12 @@ async function toggleListening() {
   min-height: 0;
   display: flex;
   width: 100%;
+  overflow: hidden;
+}
+
+.sidebar,
+.main {
+  min-height: 0;
 }
 
 .sidebar {

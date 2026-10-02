@@ -217,12 +217,10 @@ export function usePitchDetector() {
 
   const buffer = shallowRef<Float32Array | null>(null)
 
-  function setTarget(freq: number) {
+  function setTarget(freq: number | null) {
+    if (targetFrequency === freq) return
     targetFrequency = freq
     smoothedCents = null
-    smoothedFrequency = null
-    lastRawFrequency = null
-    holdFrames = 0
   }
 
   function resetSmoothing() {
@@ -274,14 +272,22 @@ export function usePitchDetector() {
       }
     }
 
-    if (rawFrequency && targetFrequency) {
-      const snapped = normalizeToTargetOctave(rawFrequency, targetFrequency)
-      smoothedFrequency = smoothValue(smoothedFrequency, snapped, FREQ_SMOOTHING)
+    if (rawFrequency) {
+      const displayFreq =
+        targetFrequency !== null
+          ? normalizeToTargetOctave(rawFrequency, targetFrequency)
+          : rawFrequency
+      smoothedFrequency = smoothValue(smoothedFrequency, displayFreq, FREQ_SMOOTHING)
       frequency.value = smoothedFrequency
 
-      const rawCents = centsFromDetected(rawFrequency, targetFrequency)
-      smoothedCents = smoothValue(smoothedCents, rawCents, CENTS_SMOOTHING)
-      cents.value = smoothedCents
+      if (targetFrequency !== null) {
+        const rawCents = centsFromDetected(rawFrequency, targetFrequency)
+        smoothedCents = smoothValue(smoothedCents, rawCents, CENTS_SMOOTHING)
+        cents.value = smoothedCents
+      } else {
+        cents.value = null
+        smoothedCents = null
+      }
     } else if (currentVolume < VOLUME_HOLD_THRESHOLD || holdFrames > holdLimit) {
       frequency.value = null
       cents.value = null

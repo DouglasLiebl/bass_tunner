@@ -169,6 +169,67 @@ export function centsFromDetected(frequency: number, target: number): number {
   return frequencyToCents(normalizeToTargetOctave(frequency, target), target)
 }
 
+export const NOTE_NAMES = [
+  'C',
+  'C♯',
+  'D',
+  'D♯',
+  'E',
+  'F',
+  'F♯',
+  'G',
+  'G♯',
+  'A',
+  'A♯',
+  'B',
+] as const
+
+export type DetectedNote = {
+  name: string
+  note: string
+  frequency: number
+  cents: number
+  midi: number
+}
+
+export function midiToFrequency(midi: number): number {
+  return 440 * 2 ** ((midi - 69) / 12)
+}
+
+export function frequencyToNote(frequency: number): DetectedNote | null {
+  if (frequency <= 0) return null
+
+  const midiFloat = 69 + 12 * Math.log2(frequency / 440)
+  const midi = Math.round(midiFloat)
+  const cents = (midiFloat - midi) * 100
+  const noteIndex = ((midi % 12) + 12) % 12
+  const octave = Math.floor(midi / 12) - 1
+  const name = NOTE_NAMES[noteIndex]
+
+  return {
+    name,
+    note: `${name}${octave}`,
+    frequency: midiToFrequency(midi),
+    cents,
+    midi,
+  }
+}
+
+export const CUSTOM_TUNING_ID = 'custom'
+
+export function createEmptyCustomStrings(): BassString[] {
+  return [
+    { name: '1', note: '—', frequency: 0 },
+    { name: '2', note: '—', frequency: 0 },
+    { name: '3', note: '—', frequency: 0 },
+    { name: '4', note: '—', frequency: 0 },
+  ]
+}
+
+export function customTuningLabel(strings: BassString[]): string {
+  return strings.map((s) => (s.note === '—' ? '—' : s.name)).join(' ')
+}
+
 export function centsToLabel(cents: number): 'flat' | 'sharp' | 'in-tune' {
   if (Math.abs(cents) < 5) return 'in-tune'
   return cents < 0 ? 'flat' : 'sharp'
