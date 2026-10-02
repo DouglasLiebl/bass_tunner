@@ -1,0 +1,87 @@
+name: Prod CD
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  checks: read
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: Bump version & create GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.new_tag }}
+      version: ${{ steps.semver.outputs.version }}
+      changelog: ${{ steps.tag.outputs.changelog }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Bump version and push tag
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+
+      - name: Strip leading "v" from tag
+        id: semver
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.tag.outputs.new_tag }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.new_tag }}
+          name: Release ${{ steps.tag.outputs.new_tag }}
+          body: ${{ steps.tag.outputs.changelog }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [release]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add SSH host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            export PATH=$PATH:/root/.nvm/versions/node/v24.11.0/bin
+
+            REPO_DIR="./codes/bass_tuner"
+            REPO_URL="git@github.com:DouglasLiebl/bass_tunner.git"
+
+            if [ -d "$REPO_DIR/.git" ]; then
+              cd "$REPO_DIR"
+              git pull origin main
+            else
+              cd ./codes
+              git clone "$REPO_URL" bass_tuner
+              cd bass_tuner
+            fi
+
+            npm install
+            npm run build
+            pm2 restart ecosystem.config.cjs

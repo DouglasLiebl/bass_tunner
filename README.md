@@ -32,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Allow microphone access when prompted.
+Open [http://localhost:3001](http://localhost:3001). Allow microphone access when prompted.
 
 ### Production
 
